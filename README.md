@@ -21,3 +21,7 @@ To run the software, you need to compile it on the Pi using ARM32 GCC, then run 
 # Expected result
 
 You should get a near exact recreation of your aircraft's CDU in the Pi's video output. 
+
+
+
+The `client` folder is from my local opencdu-client repo which i merged into this one.
