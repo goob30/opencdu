@@ -1,0 +1,905 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CDU Atlas Generator</title>
+  <style>
+    :root {
+      --bg: #111;
+      --panel: #171717;
+      --panel-2: #1f1f1f;
+      --border: #333;
+      --text: #ddd;
+      --muted: #aaa;
+      --danger: #ff7b7b;
+      --warn: #ffd166;
+      --ok: #7bd88f;
+      --accent: #79c0ff;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 16px;
+    }
+    h1, h2, h3 { margin: 0 0 12px; }
+    h1 { font-size: 1.35rem; }
+    h2 { font-size: 1.1rem; margin-top: 18px; }
+    h3 { font-size: 0.98rem; margin-top: 14px; }
+    p { color: var(--muted); }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(360px, 520px) minmax(480px, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+    }
+
+    .row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 0;
+      font-size: 0.92rem;
+    }
+
+    .inline-label {
+      flex-direction: row;
+      align-items: center;
+      gap: 8px;
+    }
+
+    input[type="number"],
+    input[type="text"],
+    input[type="file"],
+    textarea,
+    select,
+    button {
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font: inherit;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+
+    button {
+      cursor: pointer;
+      transition: 120ms ease;
+    }
+
+    button:hover { border-color: #555; }
+    button.primary {
+      background: #0d2b45;
+      border-color: #29557b;
+    }
+
+    button.warn {
+      background: #3b2e09;
+      border-color: #72590e;
+    }
+
+    .preview-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .preview-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+    }
+
+    canvas {
+      display: block;
+      background: #000;
+      border: 1px solid var(--border);
+      image-rendering: pixelated;
+      max-width: 100%;
+      height: auto;
+    }
+
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #000;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      overflow: auto;
+      max-height: 340px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 0.9rem;
+    }
+
+    .status {
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #101010;
+      color: var(--muted);
+      min-height: 44px;
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      font-size: 0.8rem;
+      margin-right: 6px;
+      margin-bottom: 6px;
+    }
+
+    .danger { color: var(--danger); }
+    .warn-text { color: var(--warn); }
+    .ok { color: var(--ok); }
+    .muted { color: var(--muted); }
+
+    .list {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .summary-box {
+      background: #101010;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+
+    .small-note {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    @media (max-width: 1100px) {
+      .layout { grid-template-columns: 1fr; }
+      .preview-grid { grid-template-columns: 1fr; }
+      .grid-3 { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 700px) {
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <h1>CDU Atlas Generator (TTF → PNG + JSON)</h1>
+  <p>
+    This version adds a <strong>Generate small from large</strong> toggle, pre-download visualizers,
+    and glyph overflow detection so you can catch bad metrics before exporting.
+  </p>
+
+  <div class="layout">
+    <section class="panel">
+      <h2>Inputs</h2>
+      <div class="grid-2">
+        <label>
+          Large TTF / OTF
+          <input id="ttfLarge" type="file" accept=".ttf,.otf" />
+        </label>
+        <label id="smallFontWrap">
+          Small TTF / OTF
+          <input id="ttfSmall" type="file" accept=".ttf,.otf" />
+        </label>
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        <label class="inline-label">
+          <input id="deriveSmallFromLarge" type="checkbox" checked />
+          Generate small from large font
+        </label>
+      </div>
+
+      <h3>Cell layout</h3>
+      <div class="grid-3">
+        <label>Cell W <input id="cellW" type="number" value="24" min="1" step="1" /></label>
+        <label>Cell H <input id="cellH" type="number" value="32" min="1" step="1" /></label>
+        <label>Cols <input id="cols" type="number" value="16" min="1" step="1" /></label>
+      </div>
+
+      <h3>Large font</h3>
+      <div class="grid-3">
+        <label>Large px <input id="largePx" type="number" value="30" min="1" step="1" /></label>
+        <label>Large baseline <input id="largeBase" type="number" value="25" min="0" step="1" /></label>
+        <label>Large Y scale <input id="largeYScale" type="number" value="1" min="0.1" step="0.01" /></label>
+      </div>
+
+      <h3>Small font</h3>
+      <div class="grid-3">
+        <label>Small px <input id="smallPx" type="number" value="18" min="1" step="1" /></label>
+        <label>Small baseline <input id="smallBase" type="number" value="23" min="0" step="1" /></label>
+        <label>Small Y scale <input id="smallYScale" type="number" value="0.85" min="0.1" step="0.01" /></label>
+      </div>
+
+      <h3>Raster options</h3>
+      <div class="grid-3">
+        <label>Alpha cutoff <input id="alphaCutoff" type="number" value="128" min="0" max="255" step="1" /></label>
+        <label>Preview scale <input id="previewScale" type="number" value="4" min="1" max="20" step="1" /></label>
+        <label>Visualizer char <input id="inspectChar" type="text" value="A" maxlength="2" /></label>
+      </div>
+
+      <div class="row">
+        <label class="inline-label">
+          <input id="showCellGrid" type="checkbox" checked />
+          Show cell grid overlay
+        </label>
+        <label class="inline-label">
+          <input id="showBaselines" type="checkbox" checked />
+          Show baselines
+        </label>
+        <label class="inline-label">
+          <input id="showBounds" type="checkbox" checked />
+          Show glyph bounds
+        </label>
+      </div>
+
+      <h3>Charset</h3>
+      <label>
+        <textarea id="charset"> !"#$%&'()*+,-./0123456789:;&lt;=&gt;?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~°</textarea>
+      </label>
+      <p class="small-note">
+        The charset is deduplicated automatically. The box placeholder is still expected to be drawn by your runtime, not by this font baker.
+      </p>
+
+      <div class="row" style="margin-top:12px;">
+        <button id="previewBtn" class="primary">Render Preview</button>
+        <button id="downloadBtn" class="warn">Download PNG + JSON</button>
+      </div>
+
+      <div id="status" class="status">Load a large font, tune the metrics, then click <strong>Render Preview</strong>.</div>
+    </section>
+
+    <section>
+      <div class="preview-grid">
+        <div class="preview-card">
+          <h2>Large atlas preview</h2>
+          <canvas id="prevLarge"></canvas>
+          <div id="largeSummary" class="summary-box" style="margin-top:10px;"></div>
+        </div>
+
+        <div class="preview-card">
+          <h2>Small atlas preview</h2>
+          <canvas id="prevSmall"></canvas>
+          <div id="smallSummary" class="summary-box" style="margin-top:10px;"></div>
+        </div>
+
+        <div class="preview-card">
+          <h2>Large glyph visualizer</h2>
+          <canvas id="vizLarge"></canvas>
+          <div id="vizLargeMeta" class="summary-box" style="margin-top:10px;"></div>
+        </div>
+
+        <div class="preview-card">
+          <h2>Small glyph visualizer</h2>
+          <canvas id="vizSmall"></canvas>
+          <div id="vizSmallMeta" class="summary-box" style="margin-top:10px;"></div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <h2>Overflow detection</h2>
+        <div id="overflowSummary" class="summary-box"></div>
+        <h3 style="margin-top:14px;">JSON preview</h3>
+        <pre id="out">No preview yet.</pre>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    const state = {
+      fontFaces: new Map(),
+      renderResult: null,
+    };
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function setStatus(html, cls = '') {
+      const el = $('status');
+      el.className = `status ${cls}`.trim();
+      el.innerHTML = html;
+    }
+
+    function getUniqueChars(charset) {
+      return Array.from(new Set(Array.from(charset)));
+    }
+
+    function ensureCharInput() {
+      const chars = getUniqueChars($('charset').value);
+      const inspect = $('inspectChar').value;
+      if (!inspect || !chars.includes(inspect[0])) {
+        $('inspectChar').value = chars[0] || 'A';
+      }
+    }
+
+    function thresholdAlpha(ctx, x, y, w, h, cutoff = 128) {
+      const img = ctx.getImageData(x, y, w, h);
+      const d = img.data;
+      for (let i = 0; i < d.length; i += 4) {
+        d[i + 3] = d[i + 3] >= cutoff ? 255 : 0;
+      }
+      ctx.putImageData(img, x, y);
+    }
+
+    async function fileToFontFace(file, familyName) {
+      const buf = await file.arrayBuffer();
+      const existing = state.fontFaces.get(familyName);
+      if (existing) {
+        document.fonts.delete(existing);
+        state.fontFaces.delete(familyName);
+      }
+
+      const fontFace = new FontFace(familyName, buf);
+      await fontFace.load();
+      document.fonts.add(fontFace);
+      state.fontFaces.set(familyName, fontFace);
+      return fontFace;
+    }
+
+    function parseForm() {
+      return {
+        deriveSmallFromLarge: $('deriveSmallFromLarge').checked,
+        cellW: parseInt($('cellW').value, 10),
+        cellH: parseInt($('cellH').value, 10),
+        cols: parseInt($('cols').value, 10),
+        largePx: parseInt($('largePx').value, 10),
+        largeBase: parseInt($('largeBase').value, 10),
+        largeYScale: parseFloat($('largeYScale').value),
+        smallPx: parseInt($('smallPx').value, 10),
+        smallBase: parseInt($('smallBase').value, 10),
+        smallYScale: parseFloat($('smallYScale').value),
+        alphaCutoff: parseInt($('alphaCutoff').value, 10),
+        previewScale: parseInt($('previewScale').value, 10),
+        inspectChar: Array.from($('inspectChar').value || 'A')[0] || 'A',
+        showCellGrid: $('showCellGrid').checked,
+        showBaselines: $('showBaselines').checked,
+        showBounds: $('showBounds').checked,
+        charset: $('charset').value,
+      };
+    }
+
+    function validateConfig(cfg) {
+      const nums = [
+        ['Cell W', cfg.cellW], ['Cell H', cfg.cellH], ['Cols', cfg.cols],
+        ['Large px', cfg.largePx], ['Large baseline', cfg.largeBase], ['Large Y scale', cfg.largeYScale],
+        ['Small px', cfg.smallPx], ['Small baseline', cfg.smallBase], ['Small Y scale', cfg.smallYScale],
+        ['Alpha cutoff', cfg.alphaCutoff], ['Preview scale', cfg.previewScale],
+      ];
+
+      for (const [name, value] of nums) {
+        if (!Number.isFinite(value)) throw new Error(`${name} is invalid.`);
+      }
+      if (cfg.cellW <= 0 || cfg.cellH <= 0 || cfg.cols <= 0) throw new Error('Cell size and cols must be greater than 0.');
+      if (cfg.largePx <= 0 || cfg.smallPx <= 0) throw new Error('Font px values must be greater than 0.');
+      if (cfg.largeYScale <= 0 || cfg.smallYScale <= 0) throw new Error('Y scales must be greater than 0.');
+      if (cfg.alphaCutoff < 0 || cfg.alphaCutoff > 255) throw new Error('Alpha cutoff must be between 0 and 255.');
+      if (!cfg.charset.length) throw new Error('Charset cannot be empty.');
+    }
+
+    function scanGlyphBounds(ctx, x, y, w, h, alphaThreshold = 1) {
+      const img = ctx.getImageData(x, y, w, h);
+      const d = img.data;
+      let minX = w;
+      let minY = h;
+      let maxX = -1;
+      let maxY = -1;
+      let solidPixels = 0;
+
+      for (let yy = 0; yy < h; yy++) {
+        for (let xx = 0; xx < w; xx++) {
+          const idx = (yy * w + xx) * 4;
+          const a = d[idx + 3];
+          if (a >= alphaThreshold) {
+            solidPixels++;
+            if (xx < minX) minX = xx;
+            if (yy < minY) minY = yy;
+            if (xx > maxX) maxX = xx;
+            if (yy > maxY) maxY = yy;
+          }
+        }
+      }
+
+      if (maxX === -1) {
+        return {
+          hasPixels: false,
+          minX: null,
+          minY: null,
+          maxX: null,
+          maxY: null,
+          width: 0,
+          height: 0,
+          solidPixels: 0,
+          touchesLeft: false,
+          touchesRight: false,
+          touchesTop: false,
+          touchesBottom: false,
+          overflowX: false,
+          overflowY: false,
+          overflowAny: false,
+        };
+      }
+
+      return {
+        hasPixels: true,
+        minX,
+        minY,
+        maxX,
+        maxY,
+        width: maxX - minX + 1,
+        height: maxY - minY + 1,
+        solidPixels,
+        touchesLeft: minX === 0,
+        touchesRight: maxX === w - 1,
+        touchesTop: minY === 0,
+        touchesBottom: maxY === h - 1,
+        overflowX: minX === 0 || maxX === w - 1,
+        overflowY: minY === 0 || maxY === h - 1,
+        overflowAny: minX === 0 || maxX === w - 1 || minY === 0 || maxY === h - 1,
+      };
+    }
+
+    function makeAtlas({ family, px, baselineY, cellW, cellH, cols, charset, yScale = 1, alphaCutoff = 128 }) {
+      const chars = getUniqueChars(charset);
+      const rows = Math.ceil(chars.length / cols);
+
+      const atlas = document.createElement('canvas');
+      atlas.width = cols * cellW;
+      atlas.height = rows * cellH;
+
+      const ctx = atlas.getContext('2d', { willReadFrequently: true });
+      ctx.clearRect(0, 0, atlas.width, atlas.height);
+      ctx.fillStyle = '#fff';
+      ctx.textBaseline = 'alphabetic';
+      ctx.font = `${px}px "${family}"`;
+      ctx.imageSmoothingEnabled = false;
+
+      const map = {};
+      const overflow = [];
+      const glyphStats = [];
+
+      for (let i = 0; i < chars.length; i++) {
+        const ch = chars[i];
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        const x0 = col * cellW;
+        const y0 = row * cellH;
+
+        ctx.clearRect(x0, y0, cellW, cellH);
+
+        const metrics = ctx.measureText(ch);
+        const measuredWidth = Math.ceil(metrics.width);
+        const drawX = Math.floor((cellW - measuredWidth) / 2);
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x0, y0, cellW, cellH);
+        ctx.clip();
+        ctx.translate(x0, y0);
+        ctx.scale(1, yScale);
+        ctx.fillText(ch, drawX, baselineY / yScale);
+        ctx.restore();
+
+        thresholdAlpha(ctx, x0, y0, cellW, cellH, alphaCutoff);
+
+        const bounds = scanGlyphBounds(ctx, x0, y0, cellW, cellH, 1);
+        const stat = {
+          ch,
+          index: i,
+          col,
+          row,
+          x: x0,
+          y: y0,
+          cellW,
+          cellH,
+          px,
+          baselineY,
+          yScale,
+          alphaCutoff,
+          measuredWidth,
+          drawX,
+          bounds,
+        };
+
+        glyphStats.push(stat);
+        if (bounds.overflowAny) overflow.push(stat);
+
+        map[ch] = {
+          x: x0,
+          y: y0,
+          w: cellW,
+          h: cellH,
+          px,
+          baselineY,
+          yScale,
+          alphaCutoff,
+        };
+      }
+
+      return { atlas, map, chars, rows, overflow, glyphStats, config: { family, px, baselineY, cellW, cellH, cols, yScale, alphaCutoff } };
+    }
+
+    function drawAtlasPreview(canvas, atlasObj, options) {
+      const scale = options.previewScale;
+      canvas.width = atlasObj.atlas.width * scale;
+      canvas.height = atlasObj.atlas.height * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(atlasObj.atlas, 0, 0, canvas.width, canvas.height);
+
+      if (options.showCellGrid) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(121,192,255,0.55)';
+        ctx.lineWidth = 1;
+        for (let x = 0; x <= atlasObj.atlas.width; x += atlasObj.config.cellW) {
+          ctx.beginPath();
+          ctx.moveTo(x * scale + 0.5, 0);
+          ctx.lineTo(x * scale + 0.5, canvas.height);
+          ctx.stroke();
+        }
+        for (let y = 0; y <= atlasObj.atlas.height; y += atlasObj.config.cellH) {
+          ctx.beginPath();
+          ctx.moveTo(0, y * scale + 0.5);
+          ctx.lineTo(canvas.width, y * scale + 0.5);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      if (options.showBaselines) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,209,102,0.95)';
+        ctx.lineWidth = 1;
+        for (let row = 0; row < atlasObj.rows; row++) {
+          const y = (row * atlasObj.config.cellH + atlasObj.config.baselineY) * scale + 0.5;
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(canvas.width, y);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      if (options.showBounds) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(123,216,143,0.9)';
+        ctx.lineWidth = 1;
+        for (const stat of atlasObj.glyphStats) {
+          if (!stat.bounds.hasPixels) continue;
+          ctx.strokeRect(
+            (stat.x + stat.bounds.minX) * scale + 0.5,
+            (stat.y + stat.bounds.minY) * scale + 0.5,
+            stat.bounds.width * scale,
+            stat.bounds.height * scale
+          );
+        }
+
+        ctx.strokeStyle = 'rgba(255,123,123,0.95)';
+        for (const stat of atlasObj.overflow) {
+          ctx.strokeRect(
+            stat.x * scale + 1.5,
+            stat.y * scale + 1.5,
+            stat.cellW * scale - 3,
+            stat.cellH * scale - 3
+          );
+        }
+        ctx.restore();
+      }
+    }
+
+    function renderVisualizer(canvas, metaEl, atlasObj, ch, options) {
+      const found = atlasObj.glyphStats.find(g => g.ch === ch) || atlasObj.glyphStats[0];
+      if (!found) {
+        canvas.width = 1;
+        canvas.height = 1;
+        metaEl.innerHTML = '<span class="danger">No glyph available.</span>';
+        return;
+      }
+
+      const scale = Math.max(8, options.previewScale * 10);
+      canvas.width = atlasObj.config.cellW * scale;
+      canvas.height = atlasObj.config.cellH * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(
+        atlasObj.atlas,
+        found.x, found.y, atlasObj.config.cellW, atlasObj.config.cellH,
+        0, 0, canvas.width, canvas.height
+      );
+
+      ctx.save();
+      ctx.strokeStyle = 'rgba(121,192,255,0.9)';
+      ctx.lineWidth = 1;
+      for (let x = 0; x <= atlasObj.config.cellW; x++) {
+        ctx.beginPath();
+        ctx.moveTo(x * scale + 0.5, 0);
+        ctx.lineTo(x * scale + 0.5, canvas.height);
+        ctx.stroke();
+      }
+      for (let y = 0; y <= atlasObj.config.cellH; y++) {
+        ctx.beginPath();
+        ctx.moveTo(0, y * scale + 0.5);
+        ctx.lineTo(canvas.width, y * scale + 0.5);
+        ctx.stroke();
+      }
+
+      const baselineY = atlasObj.config.baselineY * scale + 0.5;
+      ctx.strokeStyle = 'rgba(255,209,102,1)';
+      ctx.beginPath();
+      ctx.moveTo(0, baselineY);
+      ctx.lineTo(canvas.width, baselineY);
+      ctx.stroke();
+
+      if (found.bounds.hasPixels) {
+        ctx.strokeStyle = found.bounds.overflowAny ? 'rgba(255,123,123,1)' : 'rgba(123,216,143,1)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(
+          found.bounds.minX * scale + 1,
+          found.bounds.minY * scale + 1,
+          found.bounds.width * scale - 2,
+          found.bounds.height * scale - 2
+        );
+      }
+      ctx.restore();
+
+      metaEl.innerHTML = [
+        `<div><span class="pill">glyph ${escapeHtml(found.ch === ' ' ? '(space)' : found.ch)}</span><span class="pill">cell ${found.col},${found.row}</span></div>`,
+        `<div class="small-note">Measured width: ${found.measuredWidth}px · drawX: ${found.drawX}px · baseline: ${atlasObj.config.baselineY}px · yScale: ${atlasObj.config.yScale}</div>`,
+        found.bounds.hasPixels
+          ? `<div class="small-note">Bounds: x=${found.bounds.minX}..${found.bounds.maxX}, y=${found.bounds.minY}..${found.bounds.maxY}, size=${found.bounds.width}×${found.bounds.height}</div>`
+          : `<div class="small-note">This glyph has no solid pixels after thresholding.</div>`,
+        found.bounds.overflowAny
+          ? `<div class="danger">Touches cell edge: ${[
+              found.bounds.touchesLeft ? 'left' : null,
+              found.bounds.touchesRight ? 'right' : null,
+              found.bounds.touchesTop ? 'top' : null,
+              found.bounds.touchesBottom ? 'bottom' : null,
+            ].filter(Boolean).join(', ')}</div>`
+          : `<div class="ok">No overflow detected for this glyph.</div>`
+      ].join('');
+    }
+
+    function renderSummary(el, atlasObj, label) {
+      const total = atlasObj.glyphStats.length;
+      const overflowCount = atlasObj.overflow.length;
+      const maxW = Math.max(0, ...atlasObj.glyphStats.map(g => g.bounds.width || 0));
+      const maxH = Math.max(0, ...atlasObj.glyphStats.map(g => g.bounds.height || 0));
+      el.innerHTML = `
+        <div><span class="pill">${label}</span><span class="pill">${atlasObj.atlas.width}×${atlasObj.atlas.height}</span><span class="pill">${total} glyphs</span></div>
+        <div class="small-note">Max detected glyph bounds: ${maxW}×${maxH}px</div>
+        <div class="${overflowCount ? 'warn-text' : 'ok'}">${overflowCount ? `${overflowCount} glyph(s) touch a cell edge.` : 'No glyph edge contact detected.'}</div>
+      `;
+    }
+
+    function renderOverflowSummary(large, small) {
+      const box = $('overflowSummary');
+      const sections = [
+        ['Large', large],
+        ['Small', small],
+      ].map(([name, obj]) => {
+        if (!obj.overflow.length) {
+          return `<div style="margin-bottom:12px;"><strong>${name}:</strong> <span class="ok">no overflows detected.</span></div>`;
+        }
+
+        const items = obj.overflow.slice(0, 40).map(stat => {
+          const edges = [
+            stat.bounds.touchesLeft ? 'L' : '',
+            stat.bounds.touchesRight ? 'R' : '',
+            stat.bounds.touchesTop ? 'T' : '',
+            stat.bounds.touchesBottom ? 'B' : '',
+          ].join('');
+          const label = stat.ch === ' ' ? '(space)' : escapeHtml(stat.ch);
+          return `<li><code>${label}</code> at cell (${stat.col}, ${stat.row}) touches ${edges}</li>`;
+        }).join('');
+
+        const extra = obj.overflow.length > 40
+          ? `<div class="small-note">Showing first 40 of ${obj.overflow.length} glyphs.</div>`
+          : '';
+
+        return `
+          <div style="margin-bottom:12px;">
+            <strong>${name}:</strong> <span class="warn-text">${obj.overflow.length} glyph(s) touch a cell edge.</span>
+            ${extra}
+            <ul class="list">${items}</ul>
+          </div>
+        `;
+      }).join('');
+
+      box.innerHTML = sections;
+    }
+
+    function updateJsonPreview(large, small) {
+      $('out').textContent = [
+        'Generated preview only. Nothing downloaded yet.',
+        '',
+        'Large map sample:',
+        JSON.stringify(Object.fromEntries(Object.entries(large.map).slice(0, 8)), null, 2),
+        '',
+        'Small map sample:',
+        JSON.stringify(Object.fromEntries(Object.entries(small.map).slice(0, 8)), null, 2),
+      ].join('\n');
+    }
+
+    function downloadBlob(name, blob) {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    async function renderAll() {
+      ensureCharInput();
+      const cfg = parseForm();
+      validateConfig(cfg);
+
+      const largeFile = $('ttfLarge').files[0];
+      const smallFile = $('ttfSmall').files[0];
+      if (!largeFile) throw new Error('Pick a Large TTF / OTF first.');
+      if (!cfg.deriveSmallFromLarge && !smallFile) throw new Error('Pick a Small TTF / OTF, or enable Generate small from large font.');
+
+      setStatus('Loading fonts and rendering preview…');
+
+      await fileToFontFace(largeFile, 'CDU_Font_Large');
+      let smallFamily = 'CDU_Font_Large';
+      if (!cfg.deriveSmallFromLarge) {
+        await fileToFontFace(smallFile, 'CDU_Font_Small');
+        smallFamily = 'CDU_Font_Small';
+      }
+
+      const large = makeAtlas({
+        family: 'CDU_Font_Large',
+        px: cfg.largePx,
+        baselineY: cfg.largeBase,
+        cellW: cfg.cellW,
+        cellH: cfg.cellH,
+        cols: cfg.cols,
+        charset: cfg.charset,
+        yScale: cfg.largeYScale,
+        alphaCutoff: cfg.alphaCutoff,
+      });
+
+      const small = makeAtlas({
+        family: smallFamily,
+        px: cfg.smallPx,
+        baselineY: cfg.smallBase,
+        cellW: cfg.cellW,
+        cellH: cfg.cellH,
+        cols: cfg.cols,
+        charset: cfg.charset,
+        yScale: cfg.smallYScale,
+        alphaCutoff: cfg.alphaCutoff,
+      });
+
+      state.renderResult = { cfg, large, small };
+
+      drawAtlasPreview($('prevLarge'), large, cfg);
+      drawAtlasPreview($('prevSmall'), small, cfg);
+      renderSummary($('largeSummary'), large, cfg.deriveSmallFromLarge ? 'Large source font' : 'Large dedicated font');
+      renderSummary($('smallSummary'), small, cfg.deriveSmallFromLarge ? 'Small derived from large' : 'Small dedicated font');
+      renderVisualizer($('vizLarge'), $('vizLargeMeta'), large, cfg.inspectChar, cfg);
+      renderVisualizer($('vizSmall'), $('vizSmallMeta'), small, cfg.inspectChar, cfg);
+      renderOverflowSummary(large, small);
+      updateJsonPreview(large, small);
+
+      const totalOverflow = large.overflow.length + small.overflow.length;
+      setStatus(
+        totalOverflow
+          ? `Preview rendered. <span class="warn-text">${totalOverflow} total glyph edge contacts detected</span>. Inspect the visualizers before downloading.`
+          : '<span class="ok">Preview rendered. No glyph edge contact detected.</span> Ready to download.',
+        totalOverflow ? 'warn-text' : 'ok'
+      );
+    }
+
+    function requireRenderResult() {
+      if (!state.renderResult) {
+        throw new Error('Render a preview first so you can inspect overflow before download.');
+      }
+      return state.renderResult;
+    }
+
+    async function downloadAll() {
+      const { large, small } = requireRenderResult();
+
+      const largeBlob = await new Promise(resolve => large.atlas.toBlob(resolve, 'image/png'));
+      const smallBlob = await new Promise(resolve => small.atlas.toBlob(resolve, 'image/png'));
+
+      downloadBlob('cdu_atlas_large.png', largeBlob);
+      downloadBlob('cdu_atlas_small.png', smallBlob);
+      downloadBlob('cdu_map_large.json', new Blob([JSON.stringify(large.map, null, 2)], { type: 'application/json' }));
+      downloadBlob('cdu_map_small.json', new Blob([JSON.stringify(small.map, null, 2)], { type: 'application/json' }));
+
+      setStatus('<span class="ok">Downloaded large/small atlas PNGs and JSON maps.</span>');
+    }
+
+    function refreshDerivedUi() {
+      const derive = $('deriveSmallFromLarge').checked;
+      $('smallFontWrap').style.opacity = derive ? '0.5' : '1';
+      $('ttfSmall').disabled = derive;
+    }
+
+    $('deriveSmallFromLarge').addEventListener('change', refreshDerivedUi);
+    $('previewBtn').addEventListener('click', async () => {
+      try {
+        await renderAll();
+      } catch (err) {
+        console.error(err);
+        setStatus(`<span class="danger">${escapeHtml(err.message || String(err))}</span>`, 'danger');
+      }
+    });
+
+    $('downloadBtn').addEventListener('click', async () => {
+      try {
+        await downloadAll();
+      } catch (err) {
+        console.error(err);
+        setStatus(`<span class="danger">${escapeHtml(err.message || String(err))}</span>`, 'danger');
+      }
+    });
+
+    $('inspectChar').addEventListener('input', () => {
+      if (!state.renderResult) return;
+      const cfg = parseForm();
+      renderVisualizer($('vizLarge'), $('vizLargeMeta'), state.renderResult.large, cfg.inspectChar, cfg);
+      renderVisualizer($('vizSmall'), $('vizSmallMeta'), state.renderResult.small, cfg.inspectChar, cfg);
+    });
+
+    $('charset').addEventListener('input', ensureCharInput);
+
+    refreshDerivedUi();
+    ensureCharInput();
+  </script>
+</body>
+</html>
